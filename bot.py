@@ -1,4 +1,8 @@
 import os
+import threading
+
+from flask import Flask
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -9,26 +13,34 @@ from telegram.ext import (
     filters,
 )
 
+# =========================
+# Web server for Render
+# =========================
+
+web_app = Flask(__name__)
+
+
+@web_app.route("/")
+def home():
+    return "Bot is running!"
+
+
+def run_web_server():
+    port = int(os.getenv("PORT", "10000"))
+    web_app.run(host="0.0.0.0", port=port)
+
 
 # =========================
 # تنظیمات اصلی ربات
 # =========================
 
-# توکن جدید رباتت را اینجا بگذار
-TOKEN = "8698498177:AAFvlzO6uPySexnY8EWR976MRbGlUfPG7_U"
+TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-
-# اول بگذار 0 بماند
-# بعد داخل ربات دستور /myid را بزن
-# عددی که ربات داد را اینجا جایگزین کن
-ADMIN_ID = 1633238816
-
-# آیدی پشتیبانی بدون @
 SUPPORT_USERNAME = "mahdi_rzqhi"
 
-# شماره کارت و نام صاحب کارت
 CARD_NUMBER = "6219861402793177"
-CARD_OWNER = "مهدی رزاقی"
+CARD_OWNER = "مهدی رزقی"
 
 
 # =========================
@@ -38,25 +50,24 @@ CARD_OWNER = "مهدی رزاقی"
 PRODUCTS = {
     "plan_1gb": {
         "title": "اشتراک ۱ گیگابایت",
-        "price": "۲۳,۰۰۰ تومان",
+        "price": "۲۵,۰۰۰ تومان",
         "duration": "۳۰ روز",
         "delivery_text": "✅ اطلاعات اشتراک دیجیتال شما اینجا قرار می‌گیرد."
     },
     "plan_3gb": {
         "title": "اشتراک ۳ گیگابایت",
-        "price": "۶۷,۰۰۰ تومان",
+        "price": "۷۵,۰۰۰ تومان",
         "duration": "۳۰ روز",
         "delivery_text": "✅ اطلاعات اشتراک دیجیتال شما اینجا قرار می‌گیرد."
     },
     "plan_5gb": {
         "title": "اشتراک ۵ گیگابایت",
-        "price": "۱۱۵,۰۰۰ تومان",
+        "price": "۱۲۵,۰۰۰ تومان",
         "duration": "۳۰ روز",
         "delivery_text": "✅ اطلاعات اشتراک دیجیتال شما اینجا قرار می‌گیرد."
     },
 }
 
-# سفارش‌های کاربران تا وقتی ربات روشن است اینجا ذخیره می‌شود
 user_orders = {}
 
 
@@ -76,9 +87,9 @@ def main_menu():
 
 def buy_menu():
     keyboard = [
-        [InlineKeyboardButton("🟢 اشتراک ۱ گیگابایت - 23,000 تومان", callback_data="buy_plan_1gb")],
-        [InlineKeyboardButton("🟢 اشتراک ۳ گیگابایت - 67,000 تومان", callback_data="buy_plan_3gb")],
-        [InlineKeyboardButton("🟢 اشتراک ۵ گیگابایت - 150,000 تومان", callback_data="buy_plan_5gb")],
+        [InlineKeyboardButton("🟢 اشتراک ۱ گیگابایت - ۲۵,۰۰۰ تومان", callback_data="buy_plan_1gb")],
+        [InlineKeyboardButton("🟢 اشتراک ۳ گیگابایت - ۷۵,۰۰۰ تومان", callback_data="buy_plan_3gb")],
+        [InlineKeyboardButton("🟢 اشتراک ۵ گیگابایت - ۱۲۵,۰۰۰ تومان", callback_data="buy_plan_5gb")],
         [InlineKeyboardButton("🔙 برگشت به منو", callback_data="back")],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -102,7 +113,7 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     await update.message.reply_text(
         f"آیدی عددی شما:\n`{user_id}`\n\n"
-        f"این عدد را داخل کد، جای ADMIN_ID قرار بده.",
+        f"این عدد باید در Render داخل Environment Variable با نام ADMIN_ID قرار بگیرد.",
         parse_mode="Markdown"
     )
 
@@ -122,15 +133,15 @@ async def buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📦 محصولات موجود
 
 🟢 اشتراک ۱ گیگابایت
-💰 قیمت: ۲۳,۰۰۰ تومان
+💰 قیمت: 25,000 تومان
 ⏳ اعتبار: ۳۰ روز
 
 🟢 اشتراک ۳ گیگابایت
-💰 قیمت: ۶۷,۰۰۰ تومان
+💰 قیمت: 75,000 تومان
 ⏳ اعتبار: ۳۰ روز
 
 🟢 اشتراک ۵ گیگابایت
-💰 قیمت: 150,000 تومان
+💰 قیمت: 100,000 تومان
 ⏳ اعتبار: ۳۰ روز
 
 📩 تحویل پس از تأیید پرداخت توسط ادمین
@@ -271,8 +282,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if ADMIN_ID == 0:
         await update.message.reply_text(
-            "⚠️ هنوز ADMIN_ID داخل کد تنظیم نشده است.\n"
-            "داخل ربات دستور /myid را بزن، عدد را بردار و داخل کد جای ADMIN_ID = 0 بگذار."
+            "⚠️ هنوز ADMIN_ID تنظیم نشده است.\n"
+            "داخل ربات دستور /myid را بزن، عدد را بردار و در Render داخل Environment Variable با نام ADMIN_ID قرار بده."
         )
         return
 
@@ -321,6 +332,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 
 def run_bot():
+    if not TOKEN:
+        raise ValueError("BOT_TOKEN تنظیم نشده است. لطفاً BOT_TOKEN را در Render Environment Variables قرار بده.")
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -334,4 +348,8 @@ def run_bot():
 
 
 if __name__ == "__main__":
+    web_thread = threading.Thread(target=run_web_server)
+    web_thread.daemon = True
+    web_thread.start()
+
     run_bot()
